@@ -128,3 +128,34 @@ export const getProductsController = async (req: Request, res: Response) => {
 };
 
 // GET PRODUCT BY ID
+export const getSingleProduct = async (req: any, res: any) => {
+  try {
+    const userId = req.user.userId;
+    const { productId } = req.params;
+
+    const productDetails = await Product.find({
+      userId: new mongoose.Types.ObjectId(userId),
+      productId: new mongoose.Types.ObjectId(productId),
+    });
+
+    if (!productDetails) {
+      res.status(204).json({
+        success: true,
+        status: 204,
+        message: "No product found",
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      status: 200,
+      data: productDetails,
+    });
+  } catch (err: any) {
+    res.status(500).json({
+      success: false,
+      status: 500,
+      message: err.message,
+    });
+  }
+};
