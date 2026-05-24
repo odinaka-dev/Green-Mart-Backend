@@ -5,9 +5,15 @@ export const addToCart = async (req: any, res: any) => {
     const userId = req.user.userId;
     const { productId, quantity = 1 } = req.body;
 
+    if (!productId) {
+      return res.status(400).json({
+        success: false,
+        message: "productId is required",
+      });
+    }
+
     let cart = await Cart.findOne({ userId });
 
-    // If no cart create one
     if (!cart) {
       cart = await Cart.create({
         userId,
@@ -15,8 +21,7 @@ export const addToCart = async (req: any, res: any) => {
       });
 
       return res.status(201).json({
-        success: false,
-        statusCode: 201,
+        success: true,
         message: "Cart created",
         cart,
       });
@@ -34,23 +39,19 @@ export const addToCart = async (req: any, res: any) => {
 
     await cart.save();
 
-    // response status for a successful request - STATUS 201
-    return res.status(201).json({
+    return res.status(200).json({
       success: true,
-      status: 200,
-      message: "Product added to cart sucessfully",
+      message: "Product added to cart successfully",
       cart,
     });
   } catch (err: any) {
     return res.status(500).json({
       success: false,
-      statusCode: 500,
       message: err.message,
     });
   }
 };
 
-// GET CART
 export const getCart = async (req: any, res: any) => {
   try {
     const userId = req.user.userId;
@@ -90,4 +91,9 @@ export const removeFromCart = async (req: any, res: any) => {
   } catch (err: any) {
     return res.status(500).json({ success: false, message: err.message });
   }
+};
+
+export const clearCart = async (req: any, res: any) => {
+  try {
+  } catch (err: any) {}
 };
