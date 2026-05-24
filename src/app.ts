@@ -7,6 +7,8 @@ import rateLimit from "express-rate-limit";
 
 import authRoutes from "./routes/auth.routes";
 import productRoutes from "./routes/product.routes";
+import cartRoutes from "./routes/cart.routes";
+import orderRoutes from "./routes/order.routes";
 
 const app = express();
 // allowed origins (add your frontend origin(s) here)
@@ -55,6 +57,8 @@ app.use(globalLimiter);
 // ROUTES
 app.use("/api/auth", authRoutes);
 app.use("/api/product", productRoutes);
+app.use("/api/cart", cartRoutes);
+app.use("/api/order", orderRoutes);
 
 // HEALTH CHECK
 app.get("/", (req, res) => {

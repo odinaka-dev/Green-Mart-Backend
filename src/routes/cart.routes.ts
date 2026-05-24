@@ -8,6 +8,8 @@ import {
 
 const router = Router();
 
-router.post("/cart", verifyToken, addToCart);
-router.get("/cart", verifyToken, getCart);
-router.delete("/cart/:productId", verifyToken, removeFromCart);
+router.post("/add-cart", verifyToken, addToCart);
+router.get("/get-cart", verifyToken, getCart);
+router.delete("/delete-cart/:productId", verifyToken, removeFromCart);
+
+export default router;
