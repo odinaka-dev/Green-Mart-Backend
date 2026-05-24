@@ -52,14 +52,26 @@ export const forgotPasswordController = async (req: Request, res: Response) => {
 
     await user.save();
     // send email
-    await transporter.sendMail({
-      from: process.env.EMAIL_USER,
-      to: email,
-      subject: "Password Reset Code",
+    // await transporter.sendMail({
+    //   from: process.env.EMAIL_USER,
+    //   to: email,
+    //   subject: "Password Reset Code",
 
-      text: `Your password reset code is ${resetCode}`,
+    //   text: `Your password reset code is ${resetCode}`,
+    // });
+    console.log(`Your password reset code is ${resetCode}`);
+
+    res.status(200).json({
+      success: true,
+      status: 200,
+      message: `Reset password code sent to your email ${resetCode}`,
     });
-  } catch (err) {}
+  } catch (err: any) {
+    return res.status(500).json({
+      success: false,
+      message: err.message,
+    });
+  }
 };
 
 export const verifyResetCode = async (req: any, res: any) => {

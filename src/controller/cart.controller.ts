@@ -2,7 +2,7 @@ import Cart from "../model/cart.model";
 
 export const addToCart = async (req: any, res: any) => {
   try {
-    const userId = req.user.id;
+    const userId = req.user.userId;
     const { productId, quantity = 1 } = req.body;
 
     let cart = await Cart.findOne({ userId });
@@ -14,7 +14,12 @@ export const addToCart = async (req: any, res: any) => {
         items: [{ productId, quantity }],
       });
 
-      return res.json({ success: false, message: "Cart created", cart });
+      return res.status(201).json({
+        success: false,
+        statusCode: 201,
+        message: "Cart created",
+        cart,
+      });
     }
 
     const itemIndex = cart.items.findIndex(
@@ -28,14 +33,18 @@ export const addToCart = async (req: any, res: any) => {
     }
 
     await cart.save();
-    return res.json({
+
+    // response status for a successful request - STATUS 201
+    return res.status(201).json({
       success: true,
+      status: 200,
       message: "Product added to cart sucessfully",
       cart,
     });
   } catch (err: any) {
     return res.status(500).json({
       success: false,
+      statusCode: 500,
       message: err.message,
     });
   }
@@ -44,7 +53,7 @@ export const addToCart = async (req: any, res: any) => {
 // GET CART
 export const getCart = async (req: any, res: any) => {
   try {
-    const userId = req.user.id;
+    const userId = req.user.userId;
 
     const cart = await Cart.findOne({ userId }).populate("items.productId");
 
@@ -63,7 +72,7 @@ export const getCart = async (req: any, res: any) => {
 // REMOVE FROMO CART
 export const removeFromCart = async (req: any, res: any) => {
   try {
-    const userId = req.user.id;
+    const userId = req.user.userId;
     const { productId } = req.params;
 
     const cart = await Cart.findOne({ userId });
