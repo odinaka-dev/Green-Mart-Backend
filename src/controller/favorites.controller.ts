@@ -40,6 +40,7 @@ export const getFavorites = async (req: any, res: any) => {
   } catch (err: any) {
     return res.status(500).json({
       success: false,
+      status: 500,
       message: err.message,
     });
   }
@@ -51,7 +52,7 @@ export const removeFavorites = async (req: any, res: any) => {
     const { productId } = req.params;
 
     const deleted = await Favorite.findOneAndDelete({
-      userId: new mongoose.Types.ObjectId(userId), // ← cast this too
+      userId: new mongoose.Types.ObjectId(userId),
       productId: new mongoose.Types.ObjectId(productId),
     });
 
