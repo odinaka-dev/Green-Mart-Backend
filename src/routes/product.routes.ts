@@ -1,12 +1,14 @@
 import { Router } from "express";
 import upload from "../config/multer";
 import {
-  addFavorite,
   createProductController,
-  getFavorites,
   getProductsController,
-  removeFavorites,
 } from "../controller/product.controller";
+import {
+  addFavorite,
+  getFavorites,
+  removeFavorites,
+} from "../controller/favorites.controller";
 import { verifyToken } from "../middleware/verify.middleware";
 
 const router = Router();

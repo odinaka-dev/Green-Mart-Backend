@@ -4,5 +4,7 @@ import { createOrder, getUserOrders } from "../controller/order.controller";
 
 const router = Router();
 
-router.post("/orders", verifyToken, createOrder);
-router.get("/orders", verifyToken, getUserOrders);
+router.post("/create-orders", verifyToken, createOrder);
+router.get("/get-orders", verifyToken, getUserOrders);
+
+export default router;

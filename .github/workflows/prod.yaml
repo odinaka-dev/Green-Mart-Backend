@@ -27,6 +27,7 @@ jobs:
       - name: Run tests
         run: npm test
 
+        # errors are being picked from here
       - name: Deploy to Render Production
         run: |
           curl "$RENDER_PROD_DEPLOY_HOOK"
