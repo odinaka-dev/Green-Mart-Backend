@@ -1,0 +1,34 @@
+name: Deploy Development
+
+on:
+  push:
+    branches:
+      - develop
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Run TypeScript build
+        run: npm run build
+
+      - name: Run tests
+        run: npm test
+
+      - name: Deploy to Render Dev
+        run: |
+          curl "$RENDER_DEV_DEPLOY_HOOK"
+        env:
+          RENDER_DEV_DEPLOY_HOOK: ${{ secrets.RENDER_DEV_DEPLOY_HOOK }}
