@@ -2,8 +2,8 @@ import express from "express";
 import cors from "cors";
 import helmet from "helmet";
 import morgan from "morgan";
-import mongoSanitize from "express-mongo-sanitize";
 import rateLimit from "express-rate-limit";
+import { setupSwagger } from "./config/swagger";
 
 import authRoutes from "./routes/auth.routes";
 import productRoutes from "./routes/product.routes";
@@ -11,6 +11,7 @@ import cartRoutes from "./routes/cart.routes";
 import orderRoutes from "./routes/order.routes";
 
 const app = express();
+
 // allowed origins (add your frontend origin(s) here)
 const allowedOrigins = [
   "http://localhost:8000",
@@ -53,6 +54,7 @@ const globalLimiter = rateLimit({
 });
 
 app.use(globalLimiter);
+setupSwagger(app);
 
 // ROUTES
 app.use("/api/auth", authRoutes);
