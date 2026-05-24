@@ -1,5 +1,7 @@
 # Green Mart Backend
 
+![Green Mart Banner](https://raw.githubusercontent.com/github/explore/main/topics/nodejs/nodejs.png)
+
 ## Overview
 
 Green Mart Backend is an Express + TypeScript API for a grocery/e-commerce application. It supports user authentication, product management with Cloudinary image uploads, favorites, cart operations, and order creation.
@@ -151,6 +153,7 @@ npm run start
 ### `User`
 
 Fields:
+
 - `fullName` (String, required)
 - `email` (String, required, unique, lowercase)
 - `phoneNumber` (String, required)
@@ -162,6 +165,7 @@ Fields:
 ### `Product`
 
 Fields:
+
 - `productName` (String, required)
 - `productDescription` (String, required)
 - `productPrice` (String, required)
@@ -169,17 +173,20 @@ Fields:
 - `productImages` (array of objects with `url` and `publicId`)
 
 Validation:
+
 - product must include 1 to 4 images
 
 ### `Cart`
 
 Fields:
+
 - `userId` (ObjectId ref `User`, required)
 - `items` (array of `{ productId, quantity }`)
 
 ### `Order`
 
 Fields:
+
 - `userId` (ObjectId ref `User`, required)
 - `items` (array of `{ productId, quantity, price }`)
 - `totalAmount` (Number, required)
@@ -188,10 +195,12 @@ Fields:
 ### `Favorite`
 
 Fields:
+
 - `userId` (ObjectId ref `User`, required)
 - `productId` (ObjectId ref `Product`, required)
 
 Unique index:
+
 - `(userId, productId)` prevents duplicate favorites
 
 ## API Endpoints
@@ -199,12 +208,14 @@ Unique index:
 ### Auth Routes (`/api/auth`)
 
 #### `POST /api/auth/register`
+
 - Creates a new user
 - Validation via `src/modules/auth/auth.validation.ts`
 - Uses `registerUserService`
 - Response includes created user and JWT token
 
 Request body:
+
 - `fullName`
 - `email`
 - `phoneNumber`
@@ -212,37 +223,45 @@ Request body:
 - `role`
 
 #### `POST /api/auth/login`
+
 - Authenticates an existing user
 - Uses `LoginUserService`
 - Returns JWT token
 
 Request body:
+
 - `email`
 - `password`
 
 #### `POST /api/auth/forgot-password`
+
 - Generates password reset code
 - Saves `passwordResetToken` and expiration on the user
 - Logs the reset code to console
 
 Request body:
+
 - `email`
 
 #### `POST /api/auth/verify-otp`
+
 - Verifies password reset OTP code
 - Checks `email` and `code`
 - Returns success when valid and not expired
 
 Request body:
+
 - `email`
 - `code`
 
 #### `POST /api/auth/reset-password`
+
 - Resets user password when code is valid
 - Hashes `newPassword`
 - Clears reset code and expiration
 
 Request body:
+
 - `email`
 - `code`
 - `newPassword`
@@ -252,6 +271,7 @@ Request body:
 All product routes require `Authorization: Bearer <token>`.
 
 #### `POST /api/product/create-products`
+
 - Creates a new product
 - Accepts multipart form-data files under `productImages`
 - Maximum 4 images
@@ -259,6 +279,7 @@ All product routes require `Authorization: Bearer <token>`.
 - Creates product document with uploaded image URLs
 
 Form-data fields:
+
 - `productName`
 - `productDescription`
 - `productPrice`
@@ -266,6 +287,7 @@ Form-data fields:
 - `productImages` files
 
 #### `GET /api/product/get-products`
+
 - Returns paginated product list
 - Supports query params:
   - `page` (default 1)
@@ -274,25 +296,32 @@ Form-data fields:
   - `sort` (`price_asc`, `price_desc`, `newest`)
 
 #### `GET /api/product/get-single-product/:productId`
+
 - Returns product details for a given `productId`
 - Requires valid JWT
 
 Path params:
+
 - `productId`
 
 #### `POST /api/product/add-favorites`
+
 - Adds a product to the authenticated user’s favorites
 
 Request body:
+
 - `productId`
 
 #### `GET /api/product/get-favorites`
+
 - Returns the authenticated user’s favorite products
 
 #### `DELETE /api/product/remove-favorites/:productId`
+
 - Removes a favorite product by `productId`
 
 Path params:
+
 - `productId`
 
 ### Cart Routes (`/api/cart`)
@@ -300,22 +329,27 @@ Path params:
 All cart routes require `Authorization: Bearer <token>`.
 
 #### `POST /api/cart/add-cart`
+
 - Adds a product to the user cart
 - If no cart exists, creates one
 - If product already exists, increases quantity
 
 Request body:
+
 - `productId`
 - `quantity` (optional, default 1)
 
 #### `GET /api/cart/get-cart`
+
 - Returns the authenticated user’s cart
 - Populates `items.productId`
 
 #### `DELETE /api/cart/delete-cart/:productId`
+
 - Removes a product from the cart
 
 Path params:
+
 - `productId`
 
 ### Order Routes (`/api/order`)
@@ -323,79 +357,97 @@ Path params:
 All order routes require `Authorization: Bearer <token>`.
 
 #### `POST /api/order/create-orders`
+
 - Creates an order from the authenticated user’s cart
 - Calculates `totalAmount` from cart items
 - Clears cart after order creation
 
 #### `GET /api/order/get-orders`
+
 - Returns all orders for the authenticated user
 - Populates `items.productId`
 
 ## Controller Function Summary
 
 ### `registerUserController`
+
 - Calls `registerUserService`
 - Returns created user and JWT
 
 ### `loginUserController`
+
 - Calls `LoginUserService`
 - Returns JWT
 
 ### `forgotPasswordController`
+
 - Finds user by email
 - Generates and stores a 5-digit reset token
 - Returns success message
 
 ### `verifyResetCode`
+
 - Finds user by email and code
 - Validates expiration
 - Returns verification success
 
 ### `resetPassword`
+
 - Finds user by email and code
 - Validates expiration
 - Hashes and updates password
 - Clears reset fields
 
 ### `createProductController`
+
 - Validates file uploads
 - Converts images to base64 data URIs
 - Uploads images to Cloudinary
 - Saves product with returned image URLs
 
 ### `getProductsController`
+
 - Supports pagination, search, and sorting
 - Returns product list and metadata
 
 ### `getSingleProduct`
+
 - Fetches product details using `productId`
 - Uses authenticated user ID in query
 
 ### `addFavorite`
+
 - Creates `Favorite` record for authenticated user
 
 ### `getFavorites`
+
 - Returns user favorites with populated products
 
 ### `removeFavorites`
+
 - Deletes favorite by `productId`
 
 ### `addToCart`
+
 - Finds or creates user cart
 - Adds items or increments quantity
 
 ### `getCart`
+
 - Retrieves cart with populated product data
 
 ### `removeFromCart`
+
 - Removes matching item from user cart
 
 ### `createOrder`
+
 - Builds order from cart items
 - Computes `totalAmount`
 - Clears cart items after order created
 
 ### `getUserOrders`
+
 - Returns order history for current user
 
 ## Notes
