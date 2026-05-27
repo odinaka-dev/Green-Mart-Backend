@@ -1,15 +1,40 @@
 import { Request, Response } from "express";
+import jwt, { JwtPayload } from "jsonwebtoken";
 import User from "../model/user.model";
-import {
-  LoginUserService,
-  registerUserService,
-} from "../services/auth.service";
-import transporter from "../config/mail";
+import { LoginUserService, registerUserService } from "../services/auth.service";
 import bcrypt from "bcryptjs";
 
-// REGISTER CONTROLLER
+// ─── helpers ─────────────────────────────────────────────────────────────────
+
+/**
+ * Safely decode an optional guest token from the request body.
+ * Returns the Guest MongoDB _id string when the token is valid, or
+ * undefined when the token is absent, invalid, or not a guest token.
+ * Never throws — a bad guest token should never break login/register.
+ */
+const extractGuestMongoId = (guestToken?: string): string | undefined => {
+  if (!guestToken) return undefined;
+  try {
+    const decoded = jwt.verify(
+      guestToken,
+      process.env.JWT_SECRET!,
+    ) as JwtPayload;
+    if (decoded.type === "guest" && decoded.id) {
+      return decoded.id as string;
+    }
+  } catch {
+    // Expired or tampered token — proceed without merge
+  }
+  return undefined;
+};
+
+// ─── Register ─────────────────────────────────────────────────────────────────
+
 export const registerUserController = async (req: Request, res: Response) => {
-  const result = await registerUserService(req.body);
+  const { guestToken, ...body } = req.body;
+  const guestMongoId = extractGuestMongoId(guestToken);
+
+  const result = await registerUserService(body, guestMongoId);
 
   res.status(201).json({
     success: true,
@@ -18,9 +43,13 @@ export const registerUserController = async (req: Request, res: Response) => {
   });
 };
 
-//LOGIN CONTROLLER
+// ─── Login ────────────────────────────────────────────────────────────────────
+
 export const loginUserController = async (req: Request, res: Response) => {
-  const result = await LoginUserService(req.body);
+  const { guestToken, ...body } = req.body;
+  const guestMongoId = extractGuestMongoId(guestToken);
+
+  const result = await LoginUserService(body, guestMongoId);
 
   res.status(200).json({
     success: true,
@@ -29,7 +58,8 @@ export const loginUserController = async (req: Request, res: Response) => {
   });
 };
 
-// FORGOT PASSWORD CONTROLLER
+// ─── Forgot password ──────────────────────────────────────────────────────────
+
 export const forgotPasswordController = async (req: Request, res: Response) => {
   try {
     const { email } = req.body;
@@ -39,122 +69,90 @@ export const forgotPasswordController = async (req: Request, res: Response) => {
     if (!user) {
       return res.status(404).json({
         success: false,
-        status: 404,
         message: "User not found",
       });
     }
 
-    // generate 5-digit code
+    // Generate 5-digit OTP
     const resetCode = Math.floor(10000 + Math.random() * 90000).toString();
 
     user.passwordResetToken = resetCode;
-    user.passwordResetExpires = new Date(Date.now() + 10 * 60 * 1000);
+    user.passwordResetExpires = new Date(Date.now() + 10 * 60 * 1000); // 10 min
 
     await user.save();
-    // send email
-    // await transporter.sendMail({
-    //   from: process.env.EMAIL_USER,
-    //   to: email,
-    //   subject: "Password Reset Code",
 
-    //   text: `Your password reset code is ${resetCode}`,
-    // });
-    console.log(`Your password reset code is ${resetCode}`);
-
-    res.status(200).json({
-      success: true,
-      status: 200,
-      message: `Reset password code sent to your email ${resetCode}`,
-    });
-  } catch (err: any) {
-    return res.status(500).json({
-      success: false,
-      message: err.message,
-    });
-  }
-};
-
-export const verifyResetCode = async (req: any, res: any) => {
-  try {
-    const { email, code } = req.body;
-
-    const user = await User.findOne({
-      email,
-      resetPasswordCode: code,
-    });
-
-    if (!user) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid code",
-      });
-    }
-
-    // Check expiration
-    if (Number(user.passwordResetExpires) < Number(Date.now())) {
-      return res.status(400).json({
-        success: false,
-        message: "Password Reset Code expired, Request for another",
-      });
-    }
+    // TODO: swap console.log for the real transporter.sendMail call
+    console.log(`[dev] Password reset code for ${email}: ${resetCode}`);
 
     return res.status(200).json({
       success: true,
-      message: "Password Reset Code verified",
+      message: "Reset password code sent to your email",
     });
   } catch (err: any) {
-    return res.status(500).json({
-      success: false,
-      message: err.message,
-    });
+    return res.status(500).json({ success: false, message: err.message });
   }
 };
 
-// RESET PASSWORD CONTROLLER
+// ─── Verify OTP ───────────────────────────────────────────────────────────────
 
-export const resetPassword = async (req: any, res: any) => {
+export const verifyResetCode = async (req: Request, res: Response) => {
   try {
-    const { email, code, newPassword } = req.body;
+    const { email, code } = req.body;
 
+    // passwordResetToken is the field on the User model (was wrongly queried as resetPasswordCode)
     const user = await User.findOne({
       email,
-      resetPasswordCode: code,
+      passwordResetToken: code,
     });
 
     if (!user) {
+      return res.status(400).json({ success: false, message: "Invalid code" });
+    }
+
+    if (Number(user.passwordResetExpires) < Date.now()) {
       return res.status(400).json({
         success: false,
-        message: "Invalid code",
+        message: "Reset code has expired. Please request a new one.",
       });
     }
 
-    // Check expiration
-    if (Number(user.passwordResetExpires) < Number(Date.now())) {
+    return res.status(200).json({ success: true, message: "Code verified" });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+// ─── Reset password ───────────────────────────────────────────────────────────
+
+export const resetPassword = async (req: Request, res: Response) => {
+  try {
+    const { email, code, newPassword } = req.body;
+
+    // same fix: use passwordResetToken, not resetPasswordCode
+    const user = await User.findOne({
+      email,
+      passwordResetToken: code,
+    });
+
+    if (!user) {
+      return res.status(400).json({ success: false, message: "Invalid code" });
+    }
+
+    if (Number(user.passwordResetExpires) < Date.now()) {
       return res.status(400).json({
         success: false,
-        message: "Password Reset Code expired, Request for another",
+        message: "Reset code has expired. Please request a new one.",
       });
     }
 
-    // Hash new password
-    const hashedPassword = await bcrypt.hash(newPassword, 10);
-
-    user.password = hashedPassword;
-
-    // Clear reset fields
+    user.password = await bcrypt.hash(newPassword, 12);
     user.passwordResetToken = undefined;
     user.passwordResetExpires = undefined;
 
     await user.save();
 
-    return res.status(200).json({
-      success: true,
-      message: "Password reset successful",
-    });
+    return res.status(200).json({ success: true, message: "Password reset successful" });
   } catch (err: any) {
-    return res.status(500).json({
-      success: false,
-      message: err.message,
-    });
+    return res.status(500).json({ success: false, message: err.message });
   }
 };
