@@ -2,7 +2,7 @@ import { z } from "zod";
 
 export const registerSchema = z.object({
   fullName: z.string().min(3),
-  email: z.string().email(),
+  email: z.email(),
   phoneNumber: z.string().min(11).max(15),
   password: z
     .string()
@@ -10,4 +10,6 @@ export const registerSchema = z.object({
     .regex(/[A-Z]/, "Must contain uppercase")
     .regex(/[0-9]/, "Must contain number"),
   role: z.string(),
+  // Optional: guest token to merge cart/favorites on registration
+  guestToken: z.string().optional(),
 });
