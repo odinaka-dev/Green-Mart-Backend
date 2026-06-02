@@ -11,6 +11,7 @@ import cartRoutes from "./routes/cart.routes";
 import orderRoutes from "./routes/order.routes";
 import guestRoutes from "./routes/guest.routes";
 import favoritesRoutes from "./routes/favorites.routes";
+import adminRoutes from "./routes/admin.routes";
 
 const app = express();
 
@@ -66,6 +67,7 @@ app.use("/api/cart", cartRoutes);
 app.use("/api/order", orderRoutes);
 app.use("/api/guest", guestRoutes);
 app.use("/api/favorites", favoritesRoutes);
+app.use("/api/admin", adminRoutes);
 
 // HEALTH CHECK
 app.get("/", (req, res) => {
