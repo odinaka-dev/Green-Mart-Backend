@@ -19,7 +19,15 @@ const router = Router();
  * /api/product/create-products:
  *   post:
  *     summary: Create a new product
- *     description: Create a product with 1–4 images upload
+ *     description: |
+ *       Create a product with 1–4 images. Requires a valid user or guest token.
+ *
+ *       Array fields (`sizes`, `tags`, `availableColors`) can be sent as:
+ *       - A JSON string: `["xl","xxl"]`
+ *       - A comma-separated string: `xl,xxl`
+ *       - Multiple form-data values with the same key
+ *
+ *       `tags` and `availableColors` are stored lowercase.
  *     tags:
  *       - Product
  *     security:
@@ -43,18 +51,95 @@ const router = Router();
  *                 type: string
  *                 example: "High quality running shoes"
  *               productPrice:
+ *                 type: number
+ *                 example: 25000
+ *               ratings:
+ *                 type: number
+ *                 minimum: 0
+ *                 maximum: 5
+ *                 example: 4.5
+ *               sizes:
  *                 type: string
- *                 example: "25000"
+ *                 example: '["s","m","l","xl","xxl"]'
+ *                 description: JSON array or comma-separated list of sizes
+ *               tags:
+ *                 type: string
+ *                 example: '["male","unisex"]'
+ *                 description: Collection tags — used for filtering by ?collections=
+ *               availableColors:
+ *                 type: string
+ *                 example: '["red","blue","green"]'
+ *                 description: Available colours — used for filtering by ?color=
  *               productImages:
  *                 type: array
  *                 items:
  *                   type: string
  *                   format: binary
+ *                 description: 1 to 4 product images
  *     responses:
  *       201:
  *         description: Product created successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 product:
+ *                   type: object
+ *                   properties:
+ *                     _id:
+ *                       type: string
+ *                     productName:
+ *                       type: string
+ *                     productDescription:
+ *                       type: string
+ *                     productPrice:
+ *                       type: number
+ *                     ratings:
+ *                       type: number
+ *                     sizes:
+ *                       type: array
+ *                       items:
+ *                         type: string
+ *                       example: ["s","m","l","xl","xxl"]
+ *                     tags:
+ *                       type: array
+ *                       items:
+ *                         type: string
+ *                       example: ["male","unisex"]
+ *                     availableColors:
+ *                       type: array
+ *                       items:
+ *                         type: string
+ *                       example: ["red","blue"]
+ *                     productImages:
+ *                       type: array
+ *                       items:
+ *                         type: object
+ *                         properties:
+ *                           url:
+ *                             type: string
+ *                           publicId:
+ *                             type: string
  *       400:
- *         description: Invalid request
+ *         description: Missing or too many images
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: false
+ *                 message:
+ *                   type: string
+ *       401:
+ *         description: Unauthorized — missing or invalid token
+ *       500:
+ *         description: Server error
  */
 
 router.post(
@@ -69,16 +154,119 @@ router.post(
  * /api/product/get-products:
  *   get:
  *     summary: Get all products
- *     description: Fetch all available products
+ *     description: |
+ *       Fetch paginated products with optional search, sort, collection, and colour filters.
+ *       Supports both user and guest tokens.
+ *
+ *       **Filter by collection (tag):** `?collections=male` — returns products whose `tags` array contains "male".
+ *       Comma-separate for multiple: `?collections=male,unisex`
+ *
+ *       **Filter by colour:** `?color=red` — returns products whose `availableColors` array contains "red".
+ *       Comma-separate for multiple: `?color=red,blue`
  *     tags:
  *       - Product
  *     security:
  *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *           default: 1
+ *         description: Page number
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           default: 10
+ *         description: Number of products per page
+ *       - in: query
+ *         name: search
+ *         schema:
+ *           type: string
+ *         description: Search products by name (case-insensitive)
+ *       - in: query
+ *         name: sort
+ *         schema:
+ *           type: string
+ *           enum: [newest, price_asc, price_desc]
+ *           default: newest
+ *         description: Sort order
+ *       - in: query
+ *         name: collections
+ *         schema:
+ *           type: string
+ *         description: Filter by tag/collection. Comma-separated for multiple. Example — `male` or `male,unisex`
+ *       - in: query
+ *         name: color
+ *         schema:
+ *           type: string
+ *         description: Filter by available colour. Comma-separated for multiple. Example — `red` or `red,blue`
  *     responses:
  *       200:
  *         description: Products fetched successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 message:
+ *                   type: string
+ *                   example: Products fetched successfully
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     page:
+ *                       type: integer
+ *                     limit:
+ *                       type: integer
+ *                     total:
+ *                       type: integer
+ *                     totalPages:
+ *                       type: integer
+ *                     data:
+ *                       type: array
+ *                       items:
+ *                         type: object
+ *                         properties:
+ *                           _id:
+ *                             type: string
+ *                           productName:
+ *                             type: string
+ *                           productDescription:
+ *                             type: string
+ *                           productPrice:
+ *                             type: number
+ *                           ratings:
+ *                             type: number
+ *                           sizes:
+ *                             type: array
+ *                             items:
+ *                               type: string
+ *                           tags:
+ *                             type: array
+ *                             items:
+ *                               type: string
+ *                           availableColors:
+ *                             type: array
+ *                             items:
+ *                               type: string
+ *                           productImages:
+ *                             type: array
+ *                             items:
+ *                               type: object
+ *                               properties:
+ *                                 url:
+ *                                   type: string
+ *                                 publicId:
+ *                                   type: string
  *       401:
- *         description: Unauthorized
+ *         description: Unauthorized — missing or invalid token
+ *       500:
+ *         description: Server error
  */
 router.get("/get-products", verifyToken, getProductsController);
 
@@ -86,8 +274,8 @@ router.get("/get-products", verifyToken, getProductsController);
  * @swagger
  * /api/product/get-single-product/{productId}:
  *   get:
- *     summary: Get single product
- *     description: Fetch a single product by ID
+ *     summary: Get a single product by ID
+ *     description: Fetch a specific product by its ID. Requires a valid user token.
  *     tags:
  *       - Product
  *     security:
@@ -98,12 +286,45 @@ router.get("/get-products", verifyToken, getProductsController);
  *         required: true
  *         schema:
  *           type: string
- *         description: Product ID
+ *         description: MongoDB ObjectId of the product
+ *         example: "64f1c2a9b1d2c3e4f5678901"
  *     responses:
  *       200:
  *         description: Product fetched successfully
- *       404:
- *         description: Product not found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     _id:
+ *                       type: string
+ *                     productName:
+ *                       type: string
+ *                     productDescription:
+ *                       type: string
+ *                     productPrice:
+ *                       type: number
+ *                     productImages:
+ *                       type: array
+ *                       items:
+ *                         type: object
+ *                         properties:
+ *                           url:
+ *                             type: string
+ *                           publicId:
+ *                             type: string
+ *       204:
+ *         description: No product found
+ *       401:
+ *         description: Unauthorized — missing or invalid token
+ *       500:
+ *         description: Server error
  */
 router.get("/get-single-product/:productId", verifyToken, getSingleProduct);
 

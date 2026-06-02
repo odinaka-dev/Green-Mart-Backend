@@ -8,7 +8,7 @@ import {
 import bcrypt from "bcryptjs";
 import { EmailService } from "../services/email/email.service";
 
-// ─── helpers ─────────────────────────────────────────────────────────────────
+// helpers
 
 /**
  * Safely decode an optional guest token from the request body.
@@ -32,7 +32,7 @@ const extractGuestMongoId = (guestToken?: string): string | undefined => {
   return undefined;
 };
 
-// ─── Register ─────────────────────────────────────────────────────────────────
+// Register
 
 export const registerUserController = async (req: Request, res: Response) => {
   const { guestToken, ...body } = req.body;
@@ -47,7 +47,7 @@ export const registerUserController = async (req: Request, res: Response) => {
   });
 };
 
-// ─── Login ────────────────────────────────────────────────────────────────────
+// Login
 
 export const loginUserController = async (req: Request, res: Response) => {
   const { guestToken, ...body } = req.body;
@@ -62,7 +62,7 @@ export const loginUserController = async (req: Request, res: Response) => {
   });
 };
 
-// ─── Forgot password ──────────────────────────────────────────────────────────
+// Forgot password
 
 export const forgotPasswordController = async (req: Request, res: Response) => {
   try {
@@ -101,7 +101,7 @@ export const forgotPasswordController = async (req: Request, res: Response) => {
   }
 };
 
-// ─── Verify OTP ───────────────────────────────────────────────────────────────
+// Verify OTP
 
 export const verifyResetCode = async (req: Request, res: Response) => {
   try {
@@ -130,7 +130,7 @@ export const verifyResetCode = async (req: Request, res: Response) => {
   }
 };
 
-// ─── Reset password ───────────────────────────────────────────────────────────
+// Reset password
 
 export const resetPassword = async (req: Request, res: Response) => {
   try {
@@ -165,4 +165,11 @@ export const resetPassword = async (req: Request, res: Response) => {
   } catch (err: any) {
     return res.status(500).json({ success: false, message: err.message });
   }
+};
+
+export const userLogoutController = async (req: Request, res: Response) => {
+  res.status(200).json({
+    success: true,
+    message: "user logged out successfully",
+  });
 };

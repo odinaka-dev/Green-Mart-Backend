@@ -4,6 +4,21 @@ import cloudinary from "../config/cloudinary";
 import Favorite from "../model/favorites.model";
 import mongoose from "mongoose";
 
+const parseArrayField = (value: any): string[] => {
+  if (!value) return [];
+  if (Array.isArray(value)) return value.map((v: string) => v.trim().toLowerCase());
+  if (typeof value === "string") {
+    try {
+      const parsed = JSON.parse(value);
+      if (Array.isArray(parsed)) return parsed.map((v: string) => v.trim().toLowerCase());
+    } catch {
+      // comma-separated fallback
+      return value.split(",").map((v) => v.trim().toLowerCase()).filter(Boolean);
+    }
+  }
+  return [];
+};
+
 export const createProductController = async (req: Request, res: Response) => {
   try {
     const files = Array.isArray(req.files)
@@ -27,13 +42,10 @@ export const createProductController = async (req: Request, res: Response) => {
     const uploadedImages = await Promise.all(
       files.map(async (file) => {
         const base64 = file.buffer.toString("base64");
-
         const dataURI = `data:${file.mimetype};base64,${base64}`;
-
         const result = await cloudinary.uploader.upload(dataURI, {
           folder: "products",
         });
-
         return {
           url: result.secure_url,
           publicId: result.public_id,
@@ -41,8 +53,13 @@ export const createProductController = async (req: Request, res: Response) => {
       }),
     );
 
+    const { sizes, tags, availableColors, ...rest } = req.body;
+
     const product = await Product.create({
-      ...req.body,
+      ...rest,
+      sizes: parseArrayField(sizes),
+      tags: parseArrayField(tags),
+      availableColors: parseArrayField(availableColors),
       productImages: uploadedImages,
     });
 
@@ -65,25 +82,25 @@ export const getProductsController = async (req: Request, res: Response) => {
     const limit = Number(req.query.limit) || 10;
     const search = (req.query.search as string) || "";
     const sort = (req.query.sort as string) || "newest";
-    // const minPrice = Number(req.query.minPrice) || 0;
-    // const maxPrice = Number(req.query.maxPrice) || 100000000;
+    const collections = (req.query.collections as string) || "";
+    const color = (req.query.color as string) || "";
 
     const skip = (page - 1) * limit;
-
-    // const filter: any = {
-    //   productPrice: {
-    //     $gte: minPrice,
-    //     $lte: maxPrice,
-    //   },
-    // };
 
     const filter: any = {};
 
     if (search) {
-      filter.productName = {
-        $regex: search,
-        $options: "i",
-      };
+      filter.productName = { $regex: search, $options: "i" };
+    }
+
+    // ?collections=male  →  products where tags array contains "male"
+    if (collections) {
+      filter.tags = { $in: collections.split(",").map((t) => t.trim().toLowerCase()) };
+    }
+
+    // ?color=red  →  products where availableColors array contains "red"
+    if (color) {
+      filter.availableColors = { $in: color.split(",").map((c) => c.trim().toLowerCase()) };
     }
 
     let sortOption: any = {};
@@ -100,13 +117,10 @@ export const getProductsController = async (req: Request, res: Response) => {
         break;
     }
 
-    const products = await Product.find(filter)
-      .sort(sortOption)
-      .skip(skip)
-      .limit(limit)
-      .select("-__v");
-
-    const total = await Product.countDocuments(filter);
+    const [products, total] = await Promise.all([
+      Product.find(filter).sort(sortOption).skip(skip).limit(limit).select("-__v"),
+      Product.countDocuments(filter),
+    ]);
 
     return res.status(200).json({
       success: true,
