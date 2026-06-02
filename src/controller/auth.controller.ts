@@ -1,8 +1,12 @@
 import { Request, Response } from "express";
 import jwt, { JwtPayload } from "jsonwebtoken";
 import User from "../model/user.model";
-import { LoginUserService, registerUserService } from "../services/auth.service";
+import {
+  LoginUserService,
+  registerUserService,
+} from "../services/auth.service";
 import bcrypt from "bcryptjs";
+import { EmailService } from "../services/email/email.service";
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
 
@@ -82,7 +86,11 @@ export const forgotPasswordController = async (req: Request, res: Response) => {
     await user.save();
 
     // TODO: swap console.log for the real transporter.sendMail call
-    console.log(`[dev] Password reset code for ${email}: ${resetCode}`);
+    await EmailService.sendOtpEmail({
+      email: user.email,
+      fullName: user.fullName,
+      otp: resetCode,
+    });
 
     return res.status(200).json({
       success: true,
@@ -151,7 +159,9 @@ export const resetPassword = async (req: Request, res: Response) => {
 
     await user.save();
 
-    return res.status(200).json({ success: true, message: "Password reset successful" });
+    return res
+      .status(200)
+      .json({ success: true, message: "Password reset successful" });
   } catch (err: any) {
     return res.status(500).json({ success: false, message: err.message });
   }
