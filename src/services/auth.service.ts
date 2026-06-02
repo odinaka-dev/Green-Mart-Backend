@@ -5,6 +5,7 @@ import Cart from "../model/cart.model";
 import Favorite from "../model/favorites.model";
 import Guest from "../model/guest.model";
 import generateToken from "../utils/generateToken";
+import { EmailService } from "../services/email/email.service";
 
 // ─── Guest merge ──────────────────────────────────────────────────────────────
 
@@ -89,6 +90,11 @@ export const registerUserService = async (
 
   const token = generateToken(user._id.toString());
 
+  await EmailService.sendWelcomeEmail({
+    email: user.email,
+    fullName: user.fullName,
+  });
+
   // Merge guest data after account creation (non-blocking — don't fail register on merge error)
   if (guestMongoId) {
     await mergeGuestData(guestMongoId, user._id.toString()).catch((err) =>
@@ -105,13 +111,18 @@ export const LoginUserService = async (
   payloads: any,
   guestMongoId?: string,
 ) => {
-  const user = await User.findOne({ email: payloads.email }).select("+password");
+  const user = await User.findOne({ email: payloads.email }).select(
+    "+password",
+  );
 
   if (!user) {
     throw new Error("Invalid credentials");
   }
 
-  const isPasswordCorrect = await bcrypt.compare(payloads.password, user.password);
+  const isPasswordCorrect = await bcrypt.compare(
+    payloads.password,
+    user.password,
+  );
 
   if (!isPasswordCorrect) {
     throw new Error("Invalid credentials");
