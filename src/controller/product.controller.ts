@@ -75,6 +75,98 @@ export const createProductController = async (req: Request, res: Response) => {
   }
 };
 
+// UPDATE PRODUCT BY ID
+export const updateProductController = async (req: Request, res: Response) => {
+  try {
+    const productId = req.params.productId as string;
+
+    if (!mongoose.Types.ObjectId.isValid(productId)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid product id",
+      });
+    }
+
+    const product = await Product.findById(productId);
+
+    if (!product) {
+      return res.status(404).json({
+        success: false,
+        message: "Product not found",
+      });
+    }
+
+    const files = Array.isArray(req.files)
+      ? (req.files as Express.Multer.File[])
+      : (req.files?.productImages as Express.Multer.File[]) || [];
+
+    // Only replace images when new ones are provided
+    if (files && files.length > 0) {
+      if (files.length > 4) {
+        return res.status(400).json({
+          success: false,
+          message: "Maximum 4 images allowed",
+        });
+      }
+
+      const uploadedImages = await Promise.all(
+        files.map(async (file) => {
+          const base64 = file.buffer.toString("base64");
+          const dataURI = `data:${file.mimetype};base64,${base64}`;
+          const result = await cloudinary.uploader.upload(dataURI, {
+            folder: "products",
+          });
+          return {
+            url: result.secure_url,
+            publicId: result.public_id,
+          };
+        }),
+      );
+
+      // remove old images from cloudinary
+      await Promise.all(
+        product.productImages.map((img: any) =>
+          cloudinary.uploader.destroy(img.publicId),
+        ),
+      );
+
+      product.set("productImages", uploadedImages);
+    }
+
+    const { sizes, tags, availableColors, ...rest } = req.body;
+
+    const allowedFields = [
+      "productName",
+      "productDescription",
+      "productPrice",
+      "ratings",
+    ];
+    allowedFields.forEach((field) => {
+      if (rest[field] !== undefined) {
+        product.set(field, rest[field]);
+      }
+    });
+
+    if (sizes !== undefined) product.set("sizes", parseArrayField(sizes));
+    if (tags !== undefined) product.set("tags", parseArrayField(tags));
+    if (availableColors !== undefined)
+      product.set("availableColors", parseArrayField(availableColors));
+
+    await product.save();
+
+    return res.status(200).json({
+      success: true,
+      message: "Product updated successfully",
+      product,
+    });
+  } catch (error: any) {
+    return res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
 // controllers to get all products
 export const getProductsController = async (req: Request, res: Response) => {
   try {
