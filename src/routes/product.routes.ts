@@ -4,6 +4,7 @@ import {
   createProductController,
   getProductsController,
   getSingleProduct,
+  updateProductController,
 } from "../controller/product.controller";
 import {
   addFavorite,
@@ -327,6 +328,154 @@ router.get("/get-products", verifyToken, getProductsController);
  *         description: Server error
  */
 router.get("/get-single-product/:productId", verifyToken, getSingleProduct);
+
+/**
+ * @swagger
+ * /api/product/edit-product/{productId}:
+ *   patch:
+ *     summary: Edit a product by ID
+ *     description: |
+ *       Update an existing product. Requires a valid user or guest token.
+ *
+ *       All fields are optional — only the fields you send are updated (partial update).
+ *
+ *       Array fields (`sizes`, `tags`, `availableColors`) can be sent as:
+ *       - A JSON string: `["xl","xxl"]`
+ *       - A comma-separated string: `xl,xxl`
+ *       - Multiple form-data values with the same key
+ *
+ *       `tags` and `availableColors` are stored lowercase.
+ *
+ *       **Images:** If you upload 1–4 `productImages`, the existing images are
+ *       replaced and removed from storage. If you send no images, the current
+ *       images are kept unchanged.
+ *     tags:
+ *       - Product
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: productId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: MongoDB ObjectId of the product
+ *         example: "64f1c2a9b1d2c3e4f5678901"
+ *     requestBody:
+ *       required: false
+ *       content:
+ *         multipart/form-data:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               productName:
+ *                 type: string
+ *                 example: "Nike Air Max"
+ *               productDescription:
+ *                 type: string
+ *                 example: "High quality running shoes"
+ *               productPrice:
+ *                 type: number
+ *                 example: 25000
+ *               ratings:
+ *                 type: number
+ *                 minimum: 0
+ *                 maximum: 5
+ *                 example: 4.5
+ *               sizes:
+ *                 type: string
+ *                 example: '["s","m","l","xl","xxl"]'
+ *                 description: JSON array or comma-separated list of sizes
+ *               tags:
+ *                 type: string
+ *                 example: '["male","unisex"]'
+ *                 description: Collection tags — used for filtering by ?collections=
+ *               availableColors:
+ *                 type: string
+ *                 example: '["red","blue","green"]'
+ *                 description: Available colours — used for filtering by ?color=
+ *               productImages:
+ *                 type: array
+ *                 items:
+ *                   type: string
+ *                   format: binary
+ *                 description: 1 to 4 replacement images (optional)
+ *     responses:
+ *       200:
+ *         description: Product updated successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 message:
+ *                   type: string
+ *                   example: Product updated successfully
+ *                 product:
+ *                   type: object
+ *                   properties:
+ *                     _id:
+ *                       type: string
+ *                     productName:
+ *                       type: string
+ *                     productDescription:
+ *                       type: string
+ *                     productPrice:
+ *                       type: number
+ *                     ratings:
+ *                       type: number
+ *                     sizes:
+ *                       type: array
+ *                       items:
+ *                         type: string
+ *                       example: ["s","m","l","xl","xxl"]
+ *                     tags:
+ *                       type: array
+ *                       items:
+ *                         type: string
+ *                       example: ["male","unisex"]
+ *                     availableColors:
+ *                       type: array
+ *                       items:
+ *                         type: string
+ *                       example: ["red","blue"]
+ *                     productImages:
+ *                       type: array
+ *                       items:
+ *                         type: object
+ *                         properties:
+ *                           url:
+ *                             type: string
+ *                           publicId:
+ *                             type: string
+ *       400:
+ *         description: Invalid product id or too many images
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: false
+ *                 message:
+ *                   type: string
+ *       401:
+ *         description: Unauthorized — missing or invalid token
+ *       404:
+ *         description: Product not found
+ *       500:
+ *         description: Server error
+ */
+router.patch(
+  "/edit-product/:productId",
+  verifyToken,
+  upload.fields([{ name: "productImages", maxCount: 4 }]),
+  updateProductController,
+);
 
 // // favorites products routes
 // /**
