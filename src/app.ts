@@ -19,6 +19,7 @@ const app = express();
 const allowedOrigins = [
   "http://localhost:8000",
   "http://localhost:3000",
+  "http://192.168.12.204:3000",
   "http://127.0.0.1:3000",
   "https://green-mart-backend.onrender.com",
 ];
