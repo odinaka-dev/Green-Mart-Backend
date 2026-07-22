@@ -9,6 +9,9 @@ import authRoutes from "./routes/auth.routes";
 import productRoutes from "./routes/product.routes";
 import cartRoutes from "./routes/cart.routes";
 import orderRoutes from "./routes/order.routes";
+import guestRoutes from "./routes/guest.routes";
+import favoritesRoutes from "./routes/favorites.routes";
+import adminRoutes from "./routes/admin.routes";
 
 const app = express();
 
@@ -16,7 +19,12 @@ const app = express();
 const allowedOrigins = [
   "http://localhost:8000",
   "http://localhost:3000",
+  "http://192.168.12.204:3000",
   "http://127.0.0.1:3000",
+  "https://www.wearvbo.com/",
+  "https://www.wearvbo.com",
+  "https://wearvbo.com",
+  "https://wearvbo.com/",
   "https://green-mart-backend.onrender.com",
 ];
 
@@ -62,6 +70,9 @@ app.use("/api/auth", authRoutes);
 app.use("/api/product", productRoutes);
 app.use("/api/cart", cartRoutes);
 app.use("/api/order", orderRoutes);
+app.use("/api/guest", guestRoutes);
+app.use("/api/favorites", favoritesRoutes);
+app.use("/api/admin", adminRoutes);
 
 // HEALTH CHECK
 app.get("/", (req, res) => {
