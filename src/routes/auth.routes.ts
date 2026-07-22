@@ -5,6 +5,7 @@ import {
   loginUserController,
   registerUserController,
   resetPassword,
+  userLogoutController,
   verifyResetCode,
 } from "../controller/auth.controller";
 import { validate } from "../validators/auth.validate";
@@ -171,5 +172,38 @@ router.post("/verify-otp", authLimiter, verifyResetCode);
  *         description: Invalid credentials
  */
 router.post("/reset-password", authLimiter, resetPassword);
+
+/**
+ * @swagger
+ * /api/auth/logout:
+ *   post:
+ *     summary: User logout
+ *     description: Logout the currently authenticated user. Discard the token on the client side after calling this endpoint.
+ *     tags:
+ *       - Auth
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: User logged out successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 message:
+ *                   type: string
+ *                   example: User logged out successfully
+ *       401:
+ *         description: Unauthorized — missing or invalid token
+ *       403:
+ *         description: User access required
+ *       500:
+ *         description: Server error
+ */
+router.post("/logout", authLimiter, userLogoutController);
 
 export default router;
