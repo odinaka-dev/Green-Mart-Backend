@@ -14,9 +14,17 @@ const router = Router();
  * /api/admin/create:
  *   post:
  *     summary: Create a new admin
- *     description: Register a new admin account. Requires a valid `adminSecret` matching the server-side `ADMIN_SECRET` env variable.
+ *     description: |
+ *       Register a new admin account. This is NOT a public signup — it requires BOTH:
+ *       1. A valid admin Bearer token (only a logged-in admin may create another admin), and
+ *       2. A valid `adminSecret` matching the server-side `ADMIN_SECRET` env variable.
+ *
+ *       To bootstrap the very first admin (when none exists yet), run the seed script:
+ *       `npx ts-node src/scripts/seedAdmin.ts`
  *     tags:
  *       - Admin
+ *     security:
+ *       - bearerAuth: []
  *     requestBody:
  *       required: true
  *       content:
@@ -79,12 +87,16 @@ const router = Router();
  *                           example: ADMIN
  *       400:
  *         description: Email already in use
+ *       401:
+ *         description: Unauthorized — missing or invalid admin token
  *       403:
- *         description: Invalid admin secret
+ *         description: Not an admin, or invalid admin secret
  *       500:
  *         description: Server error
  */
-router.post("/create", authLimiter, createAdminController);
+// protectAdmin: only an authenticated ADMIN may create another admin.
+// The adminSecret checked inside createAdminService remains as a second factor.
+router.post("/create", authLimiter, protectAdmin, createAdminController);
 
 /**
  * @swagger
