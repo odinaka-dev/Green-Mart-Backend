@@ -13,6 +13,12 @@ const guestSchema = new mongoose.Schema(
           type: mongoose.Schema.Types.ObjectId,
           ref: "Product",
         },
+        // Optional variant for products sold through ProductVariant rows.
+        variantId: {
+          type: mongoose.Schema.Types.ObjectId,
+          ref: "ProductVariant",
+          default: null,
+        },
         quantity: Number,
       },
     ],
