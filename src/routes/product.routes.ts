@@ -14,7 +14,8 @@ import {
 import { protectAdmin } from "../middleware/admin.middleware";
 
 // TODO: Test product processes
-// TODO: Test payment flow
+// TODO: Test payment flow on dev
+// TODO: Create a dev env for test
 
 const router = Router();
 
