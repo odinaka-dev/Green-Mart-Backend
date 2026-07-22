@@ -12,6 +12,11 @@ import orderRoutes from "./routes/order.routes";
 import guestRoutes from "./routes/guest.routes";
 import favoritesRoutes from "./routes/favorites.routes";
 import adminRoutes from "./routes/admin.routes";
+import checkoutRoutes from "./routes/checkout.routes";
+import paymentRoutes from "./routes/payment.routes";
+import categoryRoutes from "./routes/category.routes";
+import shippingRoutes from "./routes/shipping.routes";
+import couponRoutes from "./routes/coupon.routes";
 
 const app = express();
 
@@ -68,7 +73,12 @@ setupSwagger(app);
 // ROUTES
 app.use("/api/auth", authRoutes);
 app.use("/api/product", productRoutes);
+app.use("/api/category", categoryRoutes);
 app.use("/api/cart", cartRoutes);
+app.use("/api/checkout", checkoutRoutes);
+app.use("/api/payment", paymentRoutes);
+app.use("/api/shipping", shippingRoutes);
+app.use("/api/coupon", couponRoutes);
 app.use("/api/order", orderRoutes);
 app.use("/api/guest", guestRoutes);
 app.use("/api/favorites", favoritesRoutes);

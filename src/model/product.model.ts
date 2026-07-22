@@ -15,6 +15,23 @@ const productSchema = new mongoose.Schema(
       type: Number,
       required: true,
     },
+    category: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Category",
+      default: null,
+    },
+    // Whether this product sells through ProductVariant rows. When false the
+    // product is sold directly and its Inventory row has variant: null.
+    hasVariants: {
+      type: Boolean,
+      default: false,
+    },
+    // Controls public visibility / purchasability. Inactive products are
+    // hidden from shopping endpoints and rejected at checkout.
+    isActive: {
+      type: Boolean,
+      default: true,
+    },
     ratings: {
       type: Number,
       default: 0,

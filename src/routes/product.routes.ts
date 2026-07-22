@@ -7,11 +7,15 @@ import {
   updateProductController,
 } from "../controller/product.controller";
 import {
-  addFavorite,
-  getFavorites,
-  removeFavorites,
-} from "../controller/favorites.controller";
-import { verifyToken } from "../middleware/verify.middleware";
+  createVariant,
+  getVariants,
+  updateVariant,
+} from "../controller/variant.controller";
+import { protectAdmin } from "../middleware/admin.middleware";
+
+// TODO: Test product processes
+// TODO: Test payment flow on dev
+// TODO: Create a dev env for test
 
 const router = Router();
 
@@ -145,7 +149,7 @@ const router = Router();
 
 router.post(
   "/create-products",
-  verifyToken,
+  protectAdmin,
   upload.fields([{ name: "productImages", maxCount: 4 }]),
   createProductController,
 );
@@ -269,7 +273,8 @@ router.post(
  *       500:
  *         description: Server error
  */
-router.get("/get-products", verifyToken, getProductsController);
+// Public — no authentication required for shopping.
+router.get("/get-products", getProductsController);
 
 /**
  * @swagger
@@ -327,7 +332,15 @@ router.get("/get-products", verifyToken, getProductsController);
  *       500:
  *         description: Server error
  */
-router.get("/get-single-product/:productId", verifyToken, getSingleProduct);
+// Public — no authentication required for shopping.
+router.get("/get-single-product/:productId", getSingleProduct);
+
+// ─── Variants ─────────────────────────────────────────────────────────────────
+// Public: list a product's variants (with live stock).
+router.get("/:productId/variants", getVariants);
+// Admin: create / update variants.
+router.post("/:productId/variants", protectAdmin, createVariant);
+router.patch("/variants/:variantId", protectAdmin, updateVariant);
 
 /**
  * @swagger
@@ -472,7 +485,7 @@ router.get("/get-single-product/:productId", verifyToken, getSingleProduct);
  */
 router.patch(
   "/edit-product/:productId",
-  verifyToken,
+  protectAdmin,
   upload.fields([{ name: "productImages", maxCount: 4 }]),
   updateProductController,
 );
