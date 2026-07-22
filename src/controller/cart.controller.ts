@@ -1,178 +1,204 @@
-import Cart from "../model/cart.model";
-import Guest from "../model/guest.model";
+import { Request, Response } from "express";
+import mongoose from "mongoose";
+import Product from "../model/product.model";
+import ProductVariant from "../model/productVariant.model";
+import { getAvailableStock } from "../services/inventory.service";
+import {
+  resolveGuest,
+  buildCartSummary,
+} from "../services/cart.service";
+import { AppError } from "../utils/apiResponse";
 
-// ─── helpers ─────────────────────────────────────────────────────────────────
+// The public guestId travels in the `x-guest-id` header (fallback: body/query).
+const getGuestId = (req: Request): string | undefined =>
+  (req.headers["x-guest-id"] as string) ||
+  (req.body && req.body.guestId) ||
+  (req.query.guestId as string);
 
-const isGuest = (user: any) => user?.type === "guest";
+// Two cart lines match when they reference the same product AND same variant.
+const sameLine = (line: any, productId: string, variantId?: string | null) =>
+  line.productId.toString() === productId &&
+  (line.variantId ? line.variantId.toString() : null) === (variantId || null);
 
-/**
- * Resolve the Guest document from req.user.id.
- * Returns null (with a 404 response already sent) when the session has expired.
- */
-const resolveGuest = async (user: any, res: any) => {
-  const guest = await Guest.findById(user.id);
-  if (!guest) {
-    res.status(404).json({
-      success: false,
-      message: "Guest session not found or has expired. Please create a new session.",
-    });
-    return null;
-  }
-  return guest;
-};
-
-// ─── Add to cart ─────────────────────────────────────────────────────────────
-
-export const addToCart = async (req: any, res: any) => {
+// ─── Add to cart ──────────────────────────────────────────────────────────────
+export const addToCart = async (req: Request, res: Response) => {
   try {
-    const { productId, quantity = 1 } = req.body;
+    const { productId, variantId = null, quantity = 1 } = req.body;
 
-    if (!productId) {
-      return res.status(400).json({ success: false, message: "productId is required" });
+    if (!productId || !mongoose.Types.ObjectId.isValid(productId)) {
+      return res
+        .status(400)
+        .json({ success: false, message: "A valid productId is required" });
+    }
+    const qty = Number(quantity) || 1;
+    if (qty < 1) {
+      return res
+        .status(400)
+        .json({ success: false, message: "Quantity must be at least 1" });
     }
 
-    // ── Guest path ────────────────────────────────────────────────────────────
-    if (isGuest(req.user)) {
-      const guest = await resolveGuest(req.user, res);
-      if (!guest) return;
+    const product = await Product.findById(productId);
+    if (!product || product.isActive === false) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Product not found or unavailable" });
+    }
 
-      const itemIndex = guest.cart.findIndex(
-        (item: any) => item.productId.toString() === productId,
-      );
-
-      if (itemIndex > -1) {
-        guest.cart[itemIndex].quantity += quantity;
-      } else {
-        guest.cart.push({ productId, quantity });
+    if (variantId) {
+      if (!mongoose.Types.ObjectId.isValid(variantId)) {
+        return res.status(400).json({ success: false, message: "Invalid variantId" });
       }
+      const variant = await ProductVariant.findOne({
+        _id: variantId,
+        product: productId,
+        isActive: { $ne: false },
+      });
+      if (!variant) {
+        return res
+          .status(404)
+          .json({ success: false, message: "Variant not found for this product" });
+      }
+    }
 
-      await guest.save();
+    const guest = await resolveGuest(getGuestId(req));
 
-      return res.status(200).json({
-        success: true,
-        message: "Product added to cart",
-        cart: guest.cart,
+    const existing = guest.cart.find((l: any) => sameLine(l, productId, variantId));
+    const desiredQty = (existing?.quantity ?? 0) + qty;
+
+    // Never let the cart exceed available stock.
+    const stock = await getAvailableStock(productId, variantId || null);
+    if (stock < desiredQty) {
+      return res.status(409).json({
+        success: false,
+        message: `Only ${stock} unit(s) available`,
       });
     }
 
-    // ── Authenticated user path ───────────────────────────────────────────────
-    const userId = req.user.userId;
-
-    let cart = await Cart.findOne({ userId });
-
-    if (!cart) {
-      cart = await Cart.create({ userId, items: [{ productId, quantity }] });
-      return res.status(201).json({ success: true, message: "Cart created", cart });
-    }
-
-    const itemIndex = cart.items.findIndex(
-      (item) => item.productId.toString() === productId,
-    );
-
-    if (itemIndex > -1) {
-      cart.items[itemIndex].quantity += quantity;
+    if (existing) {
+      existing.quantity = desiredQty;
     } else {
-      cart.items.push({ productId, quantity });
+      guest.cart.push({ productId, variantId: variantId || null, quantity: qty });
     }
 
-    await cart.save();
+    await guest.save();
+    const summary = await buildCartSummary(guest);
 
     return res.status(200).json({
       success: true,
-      message: "Product added to cart successfully",
-      cart,
+      message: "Product added to cart",
+      data: summary,
     });
   } catch (err: any) {
-    return res.status(500).json({ success: false, message: err.message });
+    return res
+      .status(err.statusCode || 500)
+      .json({ success: false, message: err.message });
   }
 };
 
-// ─── Get cart ─────────────────────────────────────────────────────────────────
-
-export const getCart = async (req: any, res: any) => {
+// ─── Get cart (with live pricing) ─────────────────────────────────────────────
+export const getCart = async (req: Request, res: Response) => {
   try {
-    // ── Guest path ────────────────────────────────────────────────────────────
-    if (isGuest(req.user)) {
-      const guest = await resolveGuest(req.user, res);
-      if (!guest) return;
+    const guest = await resolveGuest(getGuestId(req));
+    const summary = await buildCartSummary(guest);
 
-      // Populate productId manually for consistency with user cart response
-      await guest.populate("cart.productId");
+    return res.status(200).json({ success: true, data: summary });
+  } catch (err: any) {
+    return res
+      .status(err.statusCode || 500)
+      .json({ success: false, message: err.message });
+  }
+};
 
-      return res.status(200).json({ success: true, cart: guest.cart });
+// ─── Update quantity of a cart line ───────────────────────────────────────────
+export const updateCartItem = async (req: Request, res: Response) => {
+  try {
+    const { productId, variantId = null, quantity } = req.body;
+
+    if (!productId || quantity === undefined) {
+      return res.status(400).json({
+        success: false,
+        message: "productId and quantity are required",
+      });
+    }
+    const qty = Number(quantity);
+
+    const guest = await resolveGuest(getGuestId(req));
+    const line = guest.cart.find((l: any) => sameLine(l, productId, variantId));
+
+    if (!line) {
+      return res.status(404).json({ success: false, message: "Item not in cart" });
     }
 
-    // ── Authenticated user path ───────────────────────────────────────────────
-    const userId = req.user.userId;
-    const cart = await Cart.findOne({ userId }).populate("items.productId");
-
-    return res.status(200).json({ success: true, cart });
-  } catch (err: any) {
-    return res.status(500).json({ success: false, message: err.message });
-  }
-};
-
-// ─── Remove from cart ─────────────────────────────────────────────────────────
-
-export const removeFromCart = async (req: any, res: any) => {
-  try {
-    const { productId } = req.params;
-
-    // ── Guest path ────────────────────────────────────────────────────────────
-    if (isGuest(req.user)) {
-      const guest = await resolveGuest(req.user, res);
-      if (!guest) return;
-
+    // Quantity 0 (or less) removes the line.
+    if (qty <= 0) {
       guest.set(
         "cart",
-        guest.cart.filter((item: any) => item.productId.toString() !== productId),
+        guest.cart.filter((l: any) => !sameLine(l, productId, variantId)),
       );
-
-      await guest.save();
-
-      return res.status(200).json({ success: true, cart: guest.cart });
+    } else {
+      const stock = await getAvailableStock(productId, variantId || null);
+      if (stock < qty) {
+        return res
+          .status(409)
+          .json({ success: false, message: `Only ${stock} unit(s) available` });
+      }
+      line.quantity = qty;
     }
 
-    // ── Authenticated user path ───────────────────────────────────────────────
-    const userId = req.user.userId;
-    const cart = await Cart.findOne({ userId });
+    await guest.save();
+    const summary = await buildCartSummary(guest);
 
-    if (!cart) return res.status(404).json({ success: false, message: "Cart not found" });
+    return res.status(200).json({
+      success: true,
+      message: "Cart updated",
+      data: summary,
+    });
+  } catch (err: any) {
+    return res
+      .status(err.statusCode || 500)
+      .json({ success: false, message: err.message });
+  }
+};
 
-    cart.set(
-      "items",
-      cart.items.filter((item) => item.productId.toString() !== productId),
+// ─── Remove a line from cart ──────────────────────────────────────────────────
+export const removeFromCart = async (req: Request, res: Response) => {
+  try {
+    const productId = req.params.productId as string;
+    const variantId = (req.query.variantId as string) || null;
+
+    const guest = await resolveGuest(getGuestId(req));
+
+    guest.set(
+      "cart",
+      guest.cart.filter((l: any) => !sameLine(l, productId, variantId)),
     );
 
-    await cart.save();
+    await guest.save();
+    const summary = await buildCartSummary(guest);
 
-    return res.status(200).json({ success: true, cart });
+    return res.status(200).json({
+      success: true,
+      message: "Item removed from cart",
+      data: summary,
+    });
   } catch (err: any) {
-    return res.status(500).json({ success: false, message: err.message });
+    return res
+      .status(err.statusCode || 500)
+      .json({ success: false, message: err.message });
   }
 };
 
 // ─── Clear cart ───────────────────────────────────────────────────────────────
-
-export const clearCart = async (req: any, res: any) => {
+export const clearCart = async (req: Request, res: Response) => {
   try {
-    // ── Guest path ────────────────────────────────────────────────────────────
-    if (isGuest(req.user)) {
-      const guest = await resolveGuest(req.user, res);
-      if (!guest) return;
-
-      guest.set("cart", []);
-      await guest.save();
-
-      return res.status(200).json({ success: true, message: "Cart cleared" });
-    }
-
-    // ── Authenticated user path ───────────────────────────────────────────────
-    const userId = req.user.userId;
-    await Cart.findOneAndDelete({ userId });
+    const guest = await resolveGuest(getGuestId(req));
+    guest.set("cart", []);
+    await guest.save();
 
     return res.status(200).json({ success: true, message: "Cart cleared" });
   } catch (err: any) {
-    return res.status(500).json({ success: false, message: err.message });
+    return res
+      .status(err.statusCode || 500)
+      .json({ success: false, message: err.message });
   }
 };

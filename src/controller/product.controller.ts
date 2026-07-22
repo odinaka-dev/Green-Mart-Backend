@@ -1,8 +1,10 @@
 import { Request, Response } from "express";
 import Product from "../model/product.model";
+import ProductVariant from "../model/productVariant.model";
+import Inventory from "../model/inventory.model";
 import cloudinary from "../config/cloudinary";
-import Favorite from "../model/favorites.model";
 import mongoose from "mongoose";
+import { ensureInventory, getAvailableStock } from "../services/inventory.service";
 
 const parseArrayField = (value: any): string[] => {
   if (!value) return [];
@@ -19,6 +21,7 @@ const parseArrayField = (value: any): string[] => {
   return [];
 };
 
+// ─── Create product (admin) ───────────────────────────────────────────────────
 export const createProductController = async (req: Request, res: Response) => {
   try {
     const files = Array.isArray(req.files)
@@ -53,15 +56,20 @@ export const createProductController = async (req: Request, res: Response) => {
       }),
     );
 
-    const { sizes, tags, availableColors, ...rest } = req.body;
+    const { sizes, tags, availableColors, category, stock, ...rest } = req.body;
 
     const product = await Product.create({
       ...rest,
+      category:
+        category && mongoose.Types.ObjectId.isValid(category) ? category : null,
       sizes: parseArrayField(sizes),
       tags: parseArrayField(tags),
       availableColors: parseArrayField(availableColors),
       productImages: uploadedImages,
     });
+
+    // Create the base inventory row (variant: null) for a non-variant product.
+    await ensureInventory(product._id, null, Number(stock) || 0);
 
     return res.status(201).json({
       success: true,
@@ -75,7 +83,7 @@ export const createProductController = async (req: Request, res: Response) => {
   }
 };
 
-// UPDATE PRODUCT BY ID
+// ─── Update product (admin) ───────────────────────────────────────────────────
 export const updateProductController = async (req: Request, res: Response) => {
   try {
     const productId = req.params.productId as string;
@@ -133,13 +141,16 @@ export const updateProductController = async (req: Request, res: Response) => {
       product.set("productImages", uploadedImages);
     }
 
-    const { sizes, tags, availableColors, ...rest } = req.body;
+    const { sizes, tags, availableColors, stock, ...rest } = req.body;
 
     const allowedFields = [
       "productName",
       "productDescription",
       "productPrice",
       "ratings",
+      "category",
+      "isActive",
+      "hasVariants",
     ];
     allowedFields.forEach((field) => {
       if (rest[field] !== undefined) {
@@ -154,6 +165,15 @@ export const updateProductController = async (req: Request, res: Response) => {
 
     await product.save();
 
+    // Allow adjusting base (non-variant) stock via update.
+    if (stock !== undefined && !product.hasVariants) {
+      await Inventory.findOneAndUpdate(
+        { product: product._id, variant: null },
+        { $set: { quantity: Number(stock) || 0 } },
+        { upsert: true },
+      );
+    }
+
     return res.status(200).json({
       success: true,
       message: "Product updated successfully",
@@ -167,7 +187,7 @@ export const updateProductController = async (req: Request, res: Response) => {
   }
 };
 
-// controllers to get all products
+// ─── Get all products (public) ────────────────────────────────────────────────
 export const getProductsController = async (req: Request, res: Response) => {
   try {
     const page = Number(req.query.page) || 1;
@@ -176,23 +196,27 @@ export const getProductsController = async (req: Request, res: Response) => {
     const sort = (req.query.sort as string) || "newest";
     const collections = (req.query.collections as string) || "";
     const color = (req.query.color as string) || "";
+    const category = (req.query.category as string) || "";
 
     const skip = (page - 1) * limit;
 
-    const filter: any = {};
+    // Only active products are exposed to shoppers.
+    const filter: any = { isActive: { $ne: false } };
 
     if (search) {
       filter.productName = { $regex: search, $options: "i" };
     }
 
-    // ?collections=male  →  products where tags array contains "male"
     if (collections) {
       filter.tags = { $in: collections.split(",").map((t) => t.trim().toLowerCase()) };
     }
 
-    // ?color=red  →  products where availableColors array contains "red"
     if (color) {
       filter.availableColors = { $in: color.split(",").map((c) => c.trim().toLowerCase()) };
+    }
+
+    if (category && mongoose.Types.ObjectId.isValid(category)) {
+      filter.category = category;
     }
 
     let sortOption: any = {};
@@ -210,7 +234,12 @@ export const getProductsController = async (req: Request, res: Response) => {
     }
 
     const [products, total] = await Promise.all([
-      Product.find(filter).sort(sortOption).skip(skip).limit(limit).select("-__v"),
+      Product.find(filter)
+        .populate("category", "name slug")
+        .sort(sortOption)
+        .skip(skip)
+        .limit(limit)
+        .select("-__v"),
       Product.countDocuments(filter),
     ]);
 
@@ -233,34 +262,73 @@ export const getProductsController = async (req: Request, res: Response) => {
   }
 };
 
-// GET PRODUCT BY ID
-export const getSingleProduct = async (req: any, res: any) => {
+// ─── Get single product with variants, stock & related (public) ───────────────
+export const getSingleProduct = async (req: Request, res: Response) => {
   try {
-    const userId = req.user.userId;
-    const { productId } = req.params;
+    const productId = req.params.productId as string;
 
-    const productDetails = await Product.find({
-      userId: new mongoose.Types.ObjectId(userId),
-      productId: new mongoose.Types.ObjectId(productId),
-    });
-
-    if (!productDetails) {
-      res.status(204).json({
-        success: true,
-        status: 204,
-        message: "No product found",
+    if (!mongoose.Types.ObjectId.isValid(productId)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid product id",
       });
     }
 
+    const product = await Product.findById(productId).populate(
+      "category",
+      "name slug",
+    );
+
+    if (!product || product.isActive === false) {
+      return res.status(404).json({
+        success: false,
+        message: "Product not found",
+      });
+    }
+
+    // Variants + their live stock.
+    const variants = await ProductVariant.find({
+      product: product._id,
+      isActive: { $ne: false },
+    }).lean();
+
+    const variantsWithStock = await Promise.all(
+      variants.map(async (v) => ({
+        ...v,
+        stock: await getAvailableStock(product._id, v._id),
+      })),
+    );
+
+    // Base stock (non-variant products).
+    const baseStock = await getAvailableStock(product._id, null);
+
+    // Related products — same category (fallback: shared tags), excluding self.
+    const relatedFilter: any = {
+      _id: { $ne: product._id },
+      isActive: { $ne: false },
+    };
+    if (product.category) {
+      relatedFilter.category = product.category;
+    } else if (product.tags && product.tags.length) {
+      relatedFilter.tags = { $in: product.tags };
+    }
+
+    const related = await Product.find(relatedFilter)
+      .limit(4)
+      .select("productName productPrice productImages ratings");
+
     return res.status(200).json({
       success: true,
-      status: 200,
-      data: productDetails,
+      data: {
+        product,
+        variants: variantsWithStock,
+        stock: baseStock,
+        related,
+      },
     });
   } catch (err: any) {
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
-      status: 500,
       message: err.message,
     });
   }
